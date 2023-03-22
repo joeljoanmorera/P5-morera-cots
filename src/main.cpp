@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include <WebServer.h>
+#include <WiFi.h>
 #include "MAX30105.h"
 #include "heartRate.h"
 #include "spo2_algorithm.h"
@@ -22,6 +24,18 @@ int8_t validHeartRate; //indicator to show if the heart rate calculation is vali
 
 byte pulseLED = 2; //Must be on PWM pin
 byte readLED = 13; //Blinks with each data read
+ 
+//Wifi vars
+
+// HTML & CSS contents which display on web server
+String HTML, s_spo2, s_hr;
+// SSID & Password
+const char* ssid = "MiFibra-F392"; // Enter your SSID here
+const char* password = "5QUisHGE"; //Enter your Password here
+
+WebServer server(80);// Object of WebServer(HTTP port, 80 is default)
+
+void handle_root();
 
 void setup()
 {
@@ -53,6 +67,26 @@ void setup()
   int adcRange = 4096; //Options: 2048, 4096, 8192, 16384
   
   particleSensor.setup(ledBrightness, sampleAverage, ledMode, sampleRate, pulseWidth, adcRange); //Configure sensor with these settings
+
+  //WIFI CONNECTION
+  Serial.print("Try Connecting to ");
+  Serial.println(ssid);
+  // Connect to your wi-fi modem
+  WiFi.begin(ssid, password);
+  // Check wi-fi is connected to wi-fi network
+  while (WiFi.status() != WL_CONNECTED) 
+  {
+      delay(1000);
+      Serial.print(".");
+  }
+  Serial.println("");
+  Serial.println("WiFi connected successfully");
+  Serial.print("Got IP: ");
+  Serial.println(WiFi.localIP()); //Show ESP32 IP on serial
+  server.on("/", handle_root);
+  server.begin();
+  Serial.println("HTTP server started");
+  //END
 }
 
 void loop()
@@ -121,5 +155,55 @@ void loop()
 
     //After gathering 25 new samples recalculate HR and SP02
     maxim_heart_rate_and_oxygen_saturation(irBuffer, bufferLength, redBuffer, &spo2, &validSPO2, &heartRate, &validHeartRate);
+    
+    //Web view
+    /*if(validHeartRate)*/String s_hr = String(heartRate, DEC);
+    /*if(validSPO2)*/String s_spo2 = String(spo2, DEC);
+    
+    HTML =  "<!DOCTYPE html>"
+            "<html lang ='es'>"
+            "    <head>"
+            "        <meta charset='utf-8'>"
+            "        <title>Heart Rate & SPO2</title>"
+            "        <link rel='preconnect' href='https://fonts.googleapis.com'>"
+            "        <link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>"
+            "        <link href='https://fonts.googleapis.com/css2?family=Poppins:wght@200&display=swap' rel='stylesheet'>"
+            "    </head>"
+            "    <style>"
+            "        body{"
+            "            background-color: #252525;"
+            "            color: #bfbbbb;"
+            "            font: 200 20px 'Poppins',sans-serif ;"
+            "        }"
+            "        h1{"
+            "            color: #ffffff;"
+            "            font-size: 36px;"
+            "            text-align: center;"
+            "        }"
+            "        p{"
+            "            text-align: center;"
+            "        }"
+            "        div{"
+            "            background-color: #6a676734;"
+            "            border-radius: 15px;"
+            "        }"
+            "    </style>"
+            "            "
+            "    <body>"
+            "        <div>"
+            "            <h1>Heart Rate and Oxygen Saturation</h1>"
+            "            <p>Heart Rate : "+s_hr+" BPM &#9825;</p>"
+            "            <p>Oxygen Saturation : "+s_spo2+" % </p>"
+            "        </div>"
+            "    </body>"
+            "</html>";
+    
+    server.handleClient();
   }
+}
+
+// Handle root url (/)
+void handle_root() 
+{
+    server.send(200, "text/html", HTML);
 }

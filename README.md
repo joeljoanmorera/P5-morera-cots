@@ -1417,37 +1417,23 @@ lib_deps =  adafruit/Adafruit GFX Library@^1.11.5
 - main.cpp:
 
 ```cpp
-#include <WiFi.h>
-#include <WebServer.h>
 #include <Arduino.h>
 #include <Wire.h>
+#include <WebServer.h>
+#include <WiFi.h>
 #include "MAX30105.h"
-#include <Adafruit_I2CDevice.h> 
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
-
+#include "heartRate.h"
 #include "spo2_algorithm.h"
 
-// SSID & Password
-const char* ssid = "*****"; // Enter your SSID here
-const char* password = "*****"; //Enter your Password here
-
-WebServer server(80);// Object of WebServer(HTTP port, 80 is default)
-
-// MAX30102 VARs
 MAX30105 particleSensor;
 
 #define MAX_BRIGHTNESS 255
 
-#if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega168__)
-//Arduino Uno doesn't have endisplay.println(F("Heart rate: "));ough SRAM to store 100 samples of IR led data and red led data in 32-bit format
-//To solve this problem, 16-bit MSB of the sampled data will be truncated. Samples become 16-bit data.
-uint16_t irBuffer[100]; //infrared LED sensor data
-uint16_t redBuffer[100];  //red LED sensor data
-#else
+
 uint32_t irBuffer[100]; //infrared LED sensor data
 uint32_t redBuffer[100];  //red LED sensor data
-#endif
+
+#define REPORTING_PERIOD_MS 1000
 
 int32_t bufferLength; //data length
 int32_t spo2; //SPO2 value
@@ -1455,15 +1441,51 @@ int8_t validSPO2; //indicator to show if the SPO2 calculation is valid
 int32_t heartRate; //heart rate value
 int8_t validHeartRate; //indicator to show if the heart rate calculation is valid
 
-byte pulseLED = 11; //Must be on PWM pin
+byte pulseLED = 2; //Must be on PWM pin
 byte readLED = 13; //Blinks with each data read
-//END
+ 
+//Wifi vars
 
-void handle_root();//Function definition
+// HTML & CSS contents which display on web server
+String HTML, s_spo2, s_hr;
+// SSID & Password
+const char* ssid = "MiFibra-F392"; // Enter your SSID here
+const char* password = "5QUisHGE"; //Enter your Password here
 
-void setup() 
+WebServer server(80);// Object of WebServer(HTTP port, 80 is default)
+
+void handle_root();
+
+void setup()
 {
-  Serial.begin(115200);
+  ledcSetup(0, 0, 8); // PWM Channel = 0, Initial PWM Frequency = 0Hz, Resolution = 8 bits
+  ledcAttachPin(pulseLED, 0); //attach pulseLED pin to PWM Channel 0
+  ledcWrite(0, 255); //set PWM Channel Duty Cycle to 255
+
+  Serial.begin(115200); // initialize serial communication at 115200 bits per second:
+
+  pinMode(pulseLED, OUTPUT);
+  pinMode(readLED, OUTPUT);
+
+  // Initialize sensor
+  if (!particleSensor.begin(Wire, I2C_SPEED_FAST)) //Use default I2C port, 400kHz speed
+  {
+    Serial.println(F("MAX30105 was not found. Please check wiring/power."));
+    while (1);
+  }
+
+  //Serial.println(F("Attach sensor to finger with rubber band. Press any key to start conversion"));
+  //while (Serial.available() == 0) ; //wait until user presses a key
+  //Serial.read();
+  
+  byte ledBrightness = 60; //Options: 0=Off to 255=50mA
+  byte sampleAverage = 4; //Options: 1, 2, 4, 8, 16, 32
+  byte ledMode = 2; //Options: 1 = Red only, 2 = Red + IR, 3 = Red + IR + Green
+  byte sampleRate = 100; //Options: 50, 100, 200, 400, 800, 1000, 1600, 3200
+  int pulseWidth = 411; //Options: 69, 118, 215, 411
+  int adcRange = 4096; //Options: 2048, 4096, 8192, 16384
+  
+  particleSensor.setup(ledBrightness, sampleAverage, ledMode, sampleRate, pulseWidth, adcRange); //Configure sensor with these settings
 
   //WIFI CONNECTION
   Serial.print("Try Connecting to ");
@@ -1484,38 +1506,9 @@ void setup()
   server.begin();
   Serial.println("HTTP server started");
   //END
-
-  delay(100);
-
-  //MAX30102 setup
-  pinMode(pulseLED, OUTPUT);
-  pinMode(readLED, OUTPUT);
-
-  // Initialize sensor
-  if (!particleSensor.begin(Wire, I2C_SPEED_FAST)) //Use default I2C port, 400kHz speed
-  {
-    Serial.println(F("MAX30105 was not found. Please check wiring/power."));
-    while (1);
-  }
-
-  Serial.println(F("Attach sensor to finger with rubber band. Press any key to start conversion"));
-  while (Serial.available() == 0) ; //wait until user presses a key
-  Serial.read();
-
-  byte ledBrightness = 60; //Options: 0=Off to 255=50mA
-  byte sampleAverage = 4; //Options: 1, 2, 4, 8, 16, 32
-  byte ledMode = 2; //Options: 1 = Red only, 2 = Red + IR, 3 = Red + IR + Green
-  byte sampleRate = 100; //Options: 50, 100, 200, 400, 800, 1000, 1600, 3200
-  int pulseWidth = 411; //Options: 69, 118, 215, 411
-  int adcRange = 4096; //Options: 2048, 4096, 8192, 16384
-
-  particleSensor.setup(ledBrightness, sampleAverage, ledMode, sampleRate, pulseWidth, adcRange); //Configure sensor with these settings
-  //END
 }
 
-//Server connection : server.handleClient();
-
-void loop() 
+void loop()
 {
   bufferLength = 100; //buffer length of 100 stores 4 seconds of samples running at 25sps
 
@@ -1531,7 +1524,7 @@ void loop()
 
     Serial.print(F("red="));
     Serial.print(redBuffer[i], DEC);
-    Serial.print(F(", ir="));
+    Serial.print(F("\t ir="));
     Serial.println(irBuffer[i], DEC);
   }
 
@@ -1563,32 +1556,31 @@ void loop()
       //send samples and calculation result to terminal program through UART
       Serial.print(F("red="));
       Serial.print(redBuffer[i], DEC);
-      Serial.print(F(", ir="));
+      Serial.print(F("\t ir="));
       Serial.print(irBuffer[i], DEC);
 
-      Serial.print(F(", HR="));
+      Serial.print(F("\t HR="));
       Serial.print(heartRate, DEC);
 
-      Serial.print(F(", HRvalid="));
+      Serial.print(F("\t HRvalid="));
       Serial.print(validHeartRate, DEC);
 
-      Serial.print(F(", SPO2="));
+      Serial.print(F("\t SPO2="));
       Serial.print(spo2, DEC);
 
-      Serial.print(F(", SPO2Valid="));
+      Serial.print(F("\t SPO2Valid="));
       Serial.println(validSPO2, DEC);
     }
 
     //After gathering 25 new samples recalculate HR and SP02
     maxim_heart_rate_and_oxygen_saturation(irBuffer, bufferLength, redBuffer, &spo2, &validSPO2, &heartRate, &validHeartRate);
-  }
-}
-
-String s_spo2 = String(double(spo2));
-String s_hr = String(double(heartRate));
-
-// HTML & CSS contents which display on web server
-String HTML = " <!DOCTYPE html>"
+    
+    //Web view
+    /*if(validHeartRate)*/String s_hr = String(heartRate, DEC);
+    /*if(validSPO2)*/String s_spo2 = String(spo2, DEC);
+    
+    HTML = " <!DOCTYPE html>"
+                "<"
                 "<html>"
                     "<body>"
                         "<h1>Heart Rate and Oxygen Saturation</h1>"
@@ -1596,6 +1588,9 @@ String HTML = " <!DOCTYPE html>"
                         "<p>Oxygen Saturation : "+ s_spo2 +"</p>"
                     "</body>"
                 "</html>";
+    server.handleClient();
+  }
+}
 
 // Handle root url (/)
 void handle_root() 
@@ -1614,4 +1609,4 @@ p
 
 ###### **Montaje**
 
-![Montage pagina web](./images/i2c_p2.png)
+![Montage pagina web](./images/web_hr_spo2_p2.png)
