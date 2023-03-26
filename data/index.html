@@ -1,17 +1,44 @@
 <!DOCTYPE html>
-<html lang ='es'>
+<html class="no-js" lang ='es'>
     <head>
         <meta charset='utf-8'>
         <title>Heart Rate & SPO2</title>
         <link rel='preconnect' href='https://fonts.googleapis.com'>
         <link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>
         <link href='https://fonts.googleapis.com/css2?family=Poppins:wght@200&display=swap' rel='stylesheet'>
+        <script type="text/javascript">
+            var ws = new WebSocket("ws://" + location.hostname + "/ws");
+
+            ws.onopen = function() {
+                console.log("WebSocket connected");
+            };
+
+            ws.onmessage = function(evt) {
+                var raw = evt.data;
+                const data_array = raw.split(";");
+                document.getElementById("heartRate").innerHTML = data_array[0];
+                document.getElementById("SPO2").innerHTML = data_array[1];
+            };
+
+            ws.onerror = function (error) {
+                console.log("WebSocket Error ", error);
+            };
+
+            ws.onclose = function(){
+                console.log("WebSocket connection closed");
+            }
+        </script>
     </head>
     <style>
+        html{
+            display: inline-block;
+            margin: 1px auto;
+            text-align: center;
+        }
         body{
             background-color: #252525;
-            color: #bfbbbb;
-            font: 200 20px 'Poppins',sans-serif ;
+            color: #c1bbbb;
+            font: 200 22px 'Poppins',sans-serif
         }
         h1{
             color: #ffffff;
@@ -24,14 +51,16 @@
         div{
             background-color: #6a676734;
             border-radius: 15px;
+            margin: 2% 15% 2% 15%;
+            padding: 0.5%;
         }
     </style>
             
     <body>
         <div>
             <h1>Heart Rate and Oxygen Saturation</h1>
-            <p>Heart Rate : 100 BPM &#9825;</p>
-            <p>Oxygen Saturation : 98 % </p>
+            <p>Heart Rate : <div id="heartRate">---</div> BPM &#9825;</p>
+            <p>Oxygen Saturation : <div id="SPO2">---</div> % </p>
         </div>
     </body>
 </html>
