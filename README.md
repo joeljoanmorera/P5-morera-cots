@@ -80,6 +80,8 @@ done
 
 ![Montaje escaner](/images/escan_mount.png)
 
+***
+
 ## Ejercicio practico 2 : Utilización del pulsioximetro MAX30102
 
 ###### **Funcionamiento**
@@ -254,6 +256,8 @@ Heart Rate : 107         HRvalid : 1     Saturation in oxygen : 99       SPO2Val
 ###### **Montaje**
 
 ![Montage MAX30102](./images/MAX30102.png)
+
+***
 
 ## Ejercicios de subida de nota
 
@@ -518,6 +522,8 @@ void takingSamples()
 ###### **Montaje**
 
 ![Montage display](./images/i2c_p1.png)
+
+***
 
 ### Ejercicio de subida de nota. Parte 2 : Página web donde consultar frecuencia cardiaca y la saturación de oxígeno en sangre
 
