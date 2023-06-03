@@ -6,6 +6,24 @@
 
 Este ejercicio consiste en realizar un programa que escanee los dispositivos conectados al procesador mediante el bus I2C. Para ello el procesador manda transmisiones a todas las direcciones posibles y, en caso de que haya un dispositivo en esa dirección, la respuesta a esta transmission sera un _Acknowledge_, que, en pocas palabras, siginifica que el dispositivo ha recibido la transmission y, por tanto, existe.
 
+###### **Diagrama de estados**
+
+```mermaid
+flowchart LR;
+  ST[Setup del protocolo I2C] --> SC
+  
+  subgraph SC[Escaneo de los dispositivos]
+    D[Inicio en direccion i = 0x1] --> I[Iniciar comunicacion]
+    I --> IF{Comunicacion fallida?}
+    IF --Si--> PE[Comunicar error en direccion actual]
+    IF --No--> PS[Comunicar dispositivo encontrado en direccion actual]
+    PS & PE --> NI[i++]
+    NI --> If2{i < 127}
+    If2 --Si--> I
+    If2 --No--> FC[Comunicar cuantos dispositivos encontrados y final de escaneo]
+  end;
+```
+
 ###### **Código del programa**
 
 ```cpp
@@ -96,6 +114,28 @@ Para actualizar las muestras, cosa que se hará cada segundo, primero descartamo
 
 Todas las veces que se calculan nuevos valores son mostrados por pantalla, junto con un indicador que nos muestra la validez de cada valor.
 
+###### **Diagrama de estados**
+
+```mermaid
+flowchart LR;
+  ST[Setup del dispositivo con parametros de configuracion] --> L
+  
+  subgraph L[Programa principal]
+    if{DSR = 1?} --Si--> DT --> P
+    
+    subgraph DT[Determinar velociadad de la señal]
+      C100[Obtener 100 muestras] --> C[Calcular SPO2 y frecuencia cardiaca]
+    end
+    
+    if --No--> P[Mostrar por puerto serie los datos calculados]
+    
+    P --> T
+    
+    subgraph T[Actualizar muestras]
+      C25[Obtener 25 muestras y reducir vector a 100 muestras] --> CT[Calcular SPO2 y frecuencia cardiaca]
+    end
+  end 
+```
 ###### **Código del programa**
 
 - platformio.ini:
@@ -268,6 +308,32 @@ Heart Rate : 107         HRvalid : 1     Saturation in oxygen : 99       SPO2Val
 Esencialmente este ejercicio es practicamente al **2.1**, con la diferencia que en lugar que mostrar los valores por el puerto serie lo hacemos por el _Display_ OLED SSD1306. Para ello, creamos tres funciones nuevas adicionales a las del ejercicio anterior con el sensor MAX30102: la inicialización del display, dibujar los nuevos valores y dibujar un _bit map_. 
 
 En la configuración del programa, se inicializan ambos dispositivos y se dibuja en el display un pantalla de espera en la que aparece un corazón de 24x24 píxeles. Una vez en el bucle principal, se determina la velocidad de la señal y en aquellas iteraciones múltiples de 25 se invierten los colores de la pantalla de espera, simulando los latidos del corazón. Por último, se imprimen los valores calculados y se cojen nuevas muestras, de la manera ya explicada en el ejercicio **2.1**.
+
+```mermaid
+flowchart LR;
+  ST[Setup de los dispositivos con parametros de configuracion] --> L
+  
+  subgraph L[Programa principal]
+    if{DSR = 1?} --Si--> DT --> PP[Mostrar icono de carga en display] --> P
+    
+    subgraph DT[Determinar velociadad de la señal]
+      C100[Obtener 100 muestras] --> C[Calcular SPO2 y frecuencia cardiaca]
+    end
+    
+    if --No--> P
+    
+    subgraph P[Mostrar por el display los datos calculados]
+      CSTR[Casting a String] --> SCL[Establecer color, tamaño y cursor] --> ifP
+      ifP{Datos validos} --Si--> PD[Mostrar datos]
+      ifP --No--> notPD[Mostrar datos como desconocidos]
+    end
+    P --> T
+    
+    subgraph T[Actualizar muestras]
+      C25[Obtener 25 muestras y reducir vector a 100 muestras] --> CT[Calcular SPO2 y frecuencia cardiaca]
+    end
+  end 
+```
 
 ###### **Código del programa**
 
@@ -534,6 +600,42 @@ El último ejercicio consiste en mostrar por una página web los valores de frec
 Entre las funciones que se añaden estan: la inicialización de _SPIFSS_, que esencialmente es un sistema de ficheros que se instala en una partición del ESP32 para poder leer el fichero `index.html`; la inicialización del WiFi, donde el procesador realiza la connexión Wi-Fi; la inicialicación del servidor, donde se inicializa el servidor, se define el _Web Socket_ y se vincula a la función que gestiona los eventos del mismo.
 
 Dentro del bucle principal, después de determinar la velocidad de la señal del sensor, en caso que haya un cliente conectado, actualizamos los valores leídos en la página web y, por último, leemos nuevos valores.
+
+```mermaid
+flowchart LR;
+  subgraph ST[Setup de los dispositivos con parametros de configuracion] 
+    IFS[Iniciar File system en el ESP32] --> IM[Iniciar MAX30102]
+    IM --> IW[Iniciar connexion WiFi] --> IS[Iniciar servidor] --> IWS[Definir Web Socket]
+  end
+  
+  ST--> L
+  
+  subgraph L[Programa principal]
+    if{DSR = 1?} --Si--> DT --> P
+    
+    subgraph DT[Determinar velociadad de la señal]
+      C100[Obtener 100 muestras] --> C[Calcular SPO2 y frecuencia cardiaca]
+    end
+    
+    if --No--> P
+    
+    subgraph P[Mostrar por la pagina web los datos calculados]
+      ifW{Hay cliente y esta conectado?} --> CSTR
+      CSTR[Casting a String con formato para pagina web] -->SGC[Enviar mensaje a pagina web]
+      SGC --> JS
+      subgraph JS[App en Javascript]
+        RM[Recuperar datos] --> A[Assignar datos a los tags de la pagina web]
+      end
+    end
+    
+    P --> T
+    
+    subgraph T[Actualizar muestras]
+      C25[Obtener 25 muestras y reducir vector a 100 muestras] --> CT[Calcular SPO2 y frecuencia cardiaca]
+    end
+  
+  end 
+```
 
 ###### **Código del programa**
 
