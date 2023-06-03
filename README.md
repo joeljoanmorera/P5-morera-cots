@@ -140,7 +140,7 @@ flowchart LR;
 
 - platformio.ini:
 
-```
+```ini
 [env:esp32doit-devkit-v1]
 platform = espressif32
 board = esp32doit-devkit-v1
@@ -339,7 +339,7 @@ flowchart LR;
 
 -platformio.ini :
 
-```
+```ini
 [env:esp32doit-devkit-v1]
 platform = espressif32
 board = esp32doit-devkit-v1
@@ -603,12 +603,13 @@ Dentro del bucle principal, después de determinar la velocidad de la señal del
 
 ```mermaid
 flowchart LR;
-  subgraph ST[Setup de los dispositivos con parametros de configuracion] 
-    IFS[Iniciar File system en el ESP32] --> IM[Iniciar MAX30102]
-    IM --> IW[Iniciar connexion WiFi] --> IS[Iniciar servidor] --> IWS[Definir Web Socket]
-  end
-  
-  ST--> L
+    
+    ST --> L
+
+    subgraph ST[Setup de los dispositivos con parametros de configuracion]
+      IFS[Iniciar File system en el ESP32] --> IM[Iniciar MAX30102]
+      IM --> IW[Iniciar connexion WiFi] --> IS[Iniciar servidor] --> IWS[Definir Web Socket]
+    end
   
   subgraph L[Programa principal]
     if{DSR = 1?} --Si--> DT --> P
@@ -641,7 +642,7 @@ flowchart LR;
 
 - platformio.ini:
 
-```
+```ini
 [env:esp32doit-devkit-v1]
 platform = espressif32
 board = esp32doit-devkit-v1
